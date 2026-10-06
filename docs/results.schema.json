@@ -1,0 +1,279 @@
+{
+  "$defs": {
+    "HeatmapGrid": {
+      "properties": {
+        "width": {
+          "default": 105,
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "default": 68,
+          "title": "Height",
+          "type": "integer"
+        },
+        "bin_m": {
+          "default": 1,
+          "title": "Bin M",
+          "type": "integer"
+        }
+      },
+      "title": "HeatmapGrid",
+      "type": "object"
+    },
+    "HeatmapsData": {
+      "properties": {
+        "grid": {
+          "$ref": "#/$defs/HeatmapGrid"
+        },
+        "teams": {
+          "additionalProperties": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Teams",
+          "type": "object"
+        },
+        "tracks": {
+          "additionalProperties": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "teams",
+        "tracks"
+      ],
+      "title": "HeatmapsData",
+      "type": "object"
+    },
+    "PossessionData": {
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/PossessionInterval"
+          },
+          "title": "Intervals",
+          "type": "array"
+        },
+        "summary": {
+          "$ref": "#/$defs/PossessionSummary"
+        }
+      },
+      "required": [
+        "intervals",
+        "summary"
+      ],
+      "title": "PossessionData",
+      "type": "object"
+    },
+    "PossessionInterval": {
+      "properties": {
+        "start_s": {
+          "title": "Start S",
+          "type": "number"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "state"
+      ],
+      "title": "PossessionInterval",
+      "type": "object"
+    },
+    "PossessionSummary": {
+      "properties": {
+        "A_pct": {
+          "title": "A Pct",
+          "type": "number"
+        },
+        "B_pct": {
+          "title": "B Pct",
+          "type": "number"
+        },
+        "unknown_pct": {
+          "title": "Unknown Pct",
+          "type": "number"
+        }
+      },
+      "required": [
+        "A_pct",
+        "B_pct",
+        "unknown_pct"
+      ],
+      "title": "PossessionSummary",
+      "type": "object"
+    },
+    "ResultsMeta": {
+      "properties": {
+        "pipeline_mode": {
+          "title": "Pipeline Mode",
+          "type": "string"
+        },
+        "calibration": {
+          "default": "naive",
+          "title": "Calibration",
+          "type": "string"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "number"
+        },
+        "sample_fps": {
+          "title": "Sample Fps",
+          "type": "number"
+        },
+        "frame_size": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Frame Size",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pipeline_mode",
+        "duration_s",
+        "sample_fps",
+        "frame_size"
+      ],
+      "title": "ResultsMeta",
+      "type": "object"
+    },
+    "TrackItem": {
+      "properties": {
+        "track_id": {
+          "title": "Track Id",
+          "type": "integer"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "detector_hint": {
+          "title": "Detector Hint",
+          "type": "string"
+        },
+        "first_t": {
+          "title": "First T",
+          "type": "number"
+        },
+        "last_t": {
+          "title": "Last T",
+          "type": "number"
+        },
+        "duration_s": {
+          "title": "Duration S",
+          "type": "number"
+        },
+        "n_samples": {
+          "title": "N Samples",
+          "type": "integer"
+        },
+        "distance_m": {
+          "title": "Distance M",
+          "type": "number"
+        },
+        "avg_pos_m": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Avg Pos M",
+          "type": "array"
+        }
+      },
+      "required": [
+        "track_id",
+        "role",
+        "detector_hint",
+        "first_t",
+        "last_t",
+        "duration_s",
+        "n_samples",
+        "distance_m",
+        "avg_pos_m"
+      ],
+      "title": "TrackItem",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "meta": {
+      "$ref": "#/$defs/ResultsMeta"
+    },
+    "tracks": {
+      "items": {
+        "$ref": "#/$defs/TrackItem"
+      },
+      "title": "Tracks",
+      "type": "array"
+    },
+    "heatmaps": {
+      "$ref": "#/$defs/HeatmapsData"
+    },
+    "possession": {
+      "$ref": "#/$defs/PossessionData"
+    }
+  },
+  "required": [
+    "meta",
+    "tracks",
+    "heatmaps",
+    "possession"
+  ],
+  "title": "MatchResultsResponse",
+  "type": "object"
+}

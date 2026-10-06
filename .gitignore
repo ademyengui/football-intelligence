@@ -1,0 +1,45 @@
+# Environments & Secrets
+.env
+*.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/.venv/
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.ruff_cache/
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+.npm/
+
+# Data & Storage
+data/
+*.mp4
+*.mkv
+*.avi
+*.mov
+
+# Model Weights
+*.pt
+*.onnx
+*.engine
+*.weights
+
+# System & IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,3 @@
+api: cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
+worker: cd backend && .venv/bin/rq worker --url redis://localhost:6379/0
+web: cd frontend && npm run start -- --port 4200
