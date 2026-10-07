@@ -18,6 +18,9 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
+            "polyfills": [
+              "zone.js"
+            ],
             "allowedCommonJsDependencies": [
               "plotly.js-dist-min"
             ],
@@ -57,6 +60,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4200
+          },
           "configurations": {
             "production": {
               "buildTarget": "frontend:build:production"
