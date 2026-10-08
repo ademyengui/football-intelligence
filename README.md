@@ -1,102 +1,272 @@
-# Football Intelligence Dashboard (v1.0)
+# Football Intelligence Dashboard
 
-Post-match football analytics platform built with **FastAPI**, **RQ**, and **Angular**. Upload a broadcast match clip to run automated detection and tracking, generating player/team heatmaps, per-track distance & speed stats, and a continuous possession timeline.
+Football Intelligence is a local post-match analytics platform. Upload a football
+video, process it with Roboflow detection models, and inspect the resulting
+tracking, pitch, team, and possession analysis in an Angular dashboard.
 
----
+The repository is organized as a small monorepo:
 
-## Architecture Overview
-
-- **Backend:** FastAPI, SQLAlchemy 2.0 (PostgreSQL), RQ + Redis worker, OpenCV, scikit-learn, Pydantic v2.
-- **Frontend:** Angular 22 (Standalone Components & Signals), Tailwind CSS, Plotly.js (105m x 68m pitch overlay).
-- **Pipeline modes:**
-  - **Real Mode:** Roboflow football detection and pitch-keypoint models + ByteTrack + team classification + pitch analytics. Completed matches also include the annotated tracking video, 2D radar video, Voronoi pitch-control video, and ball-path image from the notebook workflow.
-  - **Imported Mode:** Import results JSON directly from external Kaggle or Colab notebooks.
-
----
-
-## Quick Start
-
-### 1. Prerequisites (Ubuntu 24)
-Ensure PostgreSQL and Redis services are installed and running:
-```bash
-sudo apt update
-sudo apt install -y postgresql redis-server python3-venv python3-dev libpq-dev ffmpeg
-sudo systemctl start postgresql redis-server
-
-# Create database and user
-sudo -u postgres psql -c "CREATE USER football WITH PASSWORD 'football';"
-sudo -u postgres psql -c "CREATE DATABASE football OWNER football;"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE football TO football;"
+```text
+football/
+├── backend/       FastAPI API, RQ worker, pipeline, database models and migrations
+├── frontend/      Angular dashboard
+├── docs/          Generated results schema
+├── data/          Local uploads and generated artifacts (gitignored)
+├── BUILD_INSTRUCTIONS.md
+└── Makefile
 ```
 
-### 2. Environment & Dependencies
+## Features
+
+- Upload `.mp4` and `.mkv` match clips.
+- Queue processing with Redis and RQ.
+- Detect balls, players, goalkeepers, and referees with Roboflow.
+- Track players with ByteTrack.
+- Detect pitch keypoints and project detections onto the configured soccer pitch.
+- Classify player teams with the `sports` package's notebook-compatible
+  SigLIP/UMAP/KMeans `TeamClassifier`.
+- Calculate player trajectories, distances, heatmaps, team possession, and
+  possession timelines.
+- Generate four persisted visual artifacts:
+  - Annotated broadcast video with team colors, track IDs, and ball marker.
+  - 2D pitch radar video with players, ball, and referees.
+  - Voronoi pitch-control video.
+  - Ball-path pitch image.
+- Export tracks and possession data as CSV.
+- Import results that already conform to the documented JSON schema.
+- Show processing progress and failed-job errors in the dashboard.
+- Serve generated videos in browser-compatible H.264 format.
+
+## Technology stack
+
+### Backend
+
+- Python 3.12+
+- FastAPI and Uvicorn
+- SQLAlchemy 2 and Alembic
+- PostgreSQL
+- Redis and RQ
+- Pydantic v2 and `pydantic-settings`
+- OpenCV and NumPy
+- `supervision` for detections and ByteTrack
+- Roboflow `inference_sdk` hosted inference
+- Roboflow `sports` for soccer pitch geometry, view transformation, team
+  classification, pitch drawing, radar points, Voronoi diagrams, and ball paths
+- PyTorch, Transformers, and SigLIP through the real-pipeline dependencies
+- FFmpeg/libx264 for browser-compatible artifact encoding
+
+### Frontend
+
+- Angular standalone components
+- TypeScript with strict typing
+- Tailwind CSS
+- Plotly.js charts
+- WebSocket progress updates
+
+## Processing architecture
+
+1. The Angular client uploads a video to FastAPI.
+2. FastAPI stores the upload and enqueues an RQ job in Redis.
+3. The worker opens the video and samples frames according to `FRAME_STRIDE`.
+4. Each sampled frame is sent to the Roboflow player and field-keypoint models.
+5. Detections are tracked with ByteTrack.
+6. The field keypoints are transformed into the soccer pitch coordinate system
+   used by the notebook workflow.
+7. Representative player crops are passed through the notebook-compatible
+   `sports.common.team.TeamClassifier`.
+8. The pipeline aggregates tracks, heatmaps, possession, and visual frames.
+9. The notebook-style pitch renderers create the radar, Voronoi, and ball-path
+   artifacts. The annotated broadcast frames are also rendered.
+10. Results and artifact metadata are persisted in PostgreSQL and served through
+    the API.
+
+The results schema is the contract between the pipeline and the dashboard. See
+[`docs/results.schema.json`](docs/results.schema.json).
+
+## Prerequisites
+
+The supported development environment is Ubuntu with:
+
+- Python 3.12+
+- Node.js and npm
+- PostgreSQL
+- Redis
+- FFmpeg with the `libx264` encoder
+
+Create a PostgreSQL database and ensure PostgreSQL and Redis are running before
+starting the application. Do not commit database credentials, model keys,
+videos, model weights, virtual environments, or generated data.
+
+## Setup
+
+Clone the repository and enter its directory:
+
 ```bash
-# Set up environment variables
+git clone https://github.com/ademyengui/football-intelligence.git
+cd football-intelligence
+```
+
+Create the local environment file:
+
+```bash
 cp .env.example .env
-
-# Run automated setup (virtualenv + npm dependencies)
-make setup
-
-# Run database migrations
-make migrate
 ```
 
-### 3. Configure and download real-mode dependencies
-Put the Roboflow key in `.env` as `ROBOFLOW_API_KEY`. The first real worker run downloads/caches the configured models:
+Set `ROBOFLOW_API_KEY` in `.env`. The key is read only from the local
+environment and must never be committed.
 
-- `football-players-detection-3zvbc/11` (ball, player, goalkeeper, referee)
-- `football-field-detection-f07vi/14` (pitch keypoints)
+Install the core dependencies:
 
-Install optional inference dependencies with:
+```bash
+make setup
+```
+
+Install the real-pipeline dependencies:
+
 ```bash
 backend/.venv/bin/python -m pip install -r backend/requirements-real.txt
 ```
-The dependency file pins Pillow to `10.4.0` for compatibility. Model weights and caches remain outside this repository.
 
-### 4. Run Development Server
+The real requirements pin Pillow to `10.4.0` for compatibility with the
+notebook-derived computer-vision stack.
+
+Apply database migrations:
+
 ```bash
-# Start API, RQ Worker, and Angular Web App concurrently via Honcho
+make migrate
+```
+
+## Configuration
+
+The main settings are in `.env`:
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+| `UPLOAD_DIR` | Upload and generated-artifact directory |
+| `PIPELINE_MODE` | Processing mode; use `real` |
+| `ROBOFLOW_API_KEY` | Roboflow API key |
+| `ROBOFLOW_MODEL_ID` | Player/ball/goalkeeper/referee model |
+| `ROBOFLOW_FIELD_MODEL_ID` | Soccer pitch keypoint model |
+| `DETECTION_CONFIDENCE` | Detection confidence threshold |
+| `FRAME_STRIDE` | Number of source frames skipped between sampled frames |
+| `MAX_CLIP_SECONDS` | Maximum processed clip duration |
+| `MAX_FRAME_WIDTH` | Maximum inference frame width |
+| `MIN_TRACK_SECONDS_STORE` | Minimum track duration persisted in results |
+| `JOB_TIMEOUT_SECONDS` | RQ job timeout |
+| `STALE_JOB_SECONDS` | Time before a silent processing job is considered stale |
+
+The default models are:
+
+- `football-players-detection-3zvbc/11`
+- `football-field-detection-f07vi/14`
+
+The backend uses the hosted Roboflow inference endpoint with the configured
+model IDs. Model access depends on the permissions of the configured API key.
+
+## Running the application
+
+Start the API, worker, and Angular development server together:
+
+```bash
 make dev
 ```
-Open **http://localhost:4200** in your browser.
 
----
+Open the dashboard at [http://localhost:4200](http://localhost:4200).
 
-## Results JSON Schema
+Useful service endpoints:
 
-All pipeline outputs adhere strictly to the JSON contract documented in [docs/results.schema.json](docs/results.schema.json). To re-export or validate external results:
+- API root: [http://localhost:8000](http://localhost:8000)
+- API health: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+- OpenAPI documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+To run services separately:
+
 ```bash
-# Export JSON schema to docs/results.schema.json
-make schema
-
-# Import external results.json file
-make import FILE=data/imports/sample_results.json
+cd backend
+../backend/.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+../backend/.venv/bin/python -c 'import sys; from rq.cli import main; sys.argv=["rq","worker","--url","redis://localhost:6379/0"]; main()'
 ```
 
----
+In another terminal:
 
-## Testing & Verification
+```bash
+npm --prefix frontend exec ng serve -- --port 4200 --host 0.0.0.0
+```
 
-Run the comprehensive pytest suite:
+## Testing and development commands
+
 ```bash
 make test
+make lint
+make schema
 ```
 
----
+The backend tests cover API behavior, result contracts, calibration helpers,
+and pipeline seams. The frontend can be production-built with:
 
-## Known Limitations (v1.0)
+```bash
+npm --prefix frontend run build
+```
 
-1. **Keypoint Calibration:** Pitch projection depends on enough visible field keypoints; clips with insufficient keypoints fail clearly rather than returning synthetic positions.
-2. **Colour-Based Team Classification:** Team classification uses median Lab colour clustering of upper-body crops. Goalkeepers and referees are categorized as `role: "other"` and do not contribute to team possession.
-3. **ID Fragmentation:** ByteTrack IDs can fragment across lost frames. Use the **Minimum Duration Slider** on the Stats tab to filter short fragments.
-4. **Hardware Compute Caps:** Inference is resource-intensive and capped to short clips (`MAX_CLIP_SECONDS=120`).
+## Results and artifacts
 
----
+Results are exposed through:
 
-## Future Work
+```text
+GET /api/v1/matches/{match_id}/results
+GET /api/v1/matches/{match_id}/artifacts/{kind}
+GET /api/v1/matches/{match_id}/export.csv?kind=tracks
+GET /api/v1/matches/{match_id}/export.csv?kind=possession
+```
 
-- Homography pitch calibration with automatic line detection.
-- SigLIP embedding-based team classification.
-- Manual per-track role override in the dashboard UI.
-- Trajectory replay and video synchronization.
-- Pressing, formation, and passing sequence analytics.
+Artifact files are stored below:
+
+```text
+data/uploads/artifacts/{match_id}/
+├── annotated.mp4
+├── radar.mp4
+├── voronoi.mp4
+└── ball-path.png
+```
+
+The generated MP4 files are encoded with H.264 constrained baseline,
+`yuv420p`, and fast-start metadata so they can be played by common browsers.
+
+## Importing existing results
+
+Results that conform to the schema can be imported without running inference:
+
+```bash
+make import FILE=data/imports/results.json
+```
+
+Regenerate the schema after changing result models:
+
+```bash
+make schema
+```
+
+## Security and repository hygiene
+
+- Keep `.env` local and rotate keys if they are exposed.
+- Do not commit videos, generated artifacts, model weights, caches, `node_modules`,
+  Python virtual environments, or database files.
+- The application is intended for local development and does not include
+  authentication or multi-user authorization.
+
+## Current limitations
+
+- Processing is compute- and network-intensive because sampled frames use hosted
+  Roboflow inference.
+- ByteTrack can fragment IDs when detections disappear.
+- Pitch projection requires enough visible, confident field keypoints.
+- Team classification is intentionally bounded to representative tracks to keep
+  processing practical on local hardware.
+- The application is a local development platform, not a production deployment.
+
+## License
+
+No license has been declared for this repository yet. Add a project license
+before distributing the code publicly.
