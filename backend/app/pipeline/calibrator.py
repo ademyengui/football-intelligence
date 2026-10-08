@@ -74,6 +74,6 @@ class HomographyCalibrator:
             raise ValueError("Pitch calibration is unavailable: no reliable field keypoints detected")
         point = np.asarray([[point_px]], dtype=np.float32)
         projected = cv2.perspectiveTransform(point, self.matrix)[0, 0]
-        x_m = float(np.clip(projected[0], 0.0, self.config.length))
-        y_m = float(np.clip(projected[1], 0.0, self.config.width))
+        x_m = float(np.clip(projected[0] / self.config.length * 105.0, 0.0, 105.0))
+        y_m = float(np.clip(projected[1] / self.config.width * 68.0, 0.0, 68.0))
         return round(x_m, 1), round(y_m, 1)

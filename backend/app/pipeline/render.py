@@ -16,11 +16,13 @@ PITCH_COLOR = (70, 70, 70)
 def _pitch(canvas: np.ndarray) -> np.ndarray:
     h, w = canvas.shape[:2]
     sx, sy = w / 105.0, h / 68.0
-    cv2.rectangle(canvas, (0, 0), (w - 1, h - 1), (35, 120, 35), 2)
-    cv2.line(canvas, (w // 2, 0), (w // 2, h), (35, 120, 35), 2)
-    cv2.circle(canvas, (w // 2, h // 2), int(9.15 * min(sx, sy)), (35, 120, 35), 2)
+    canvas[:] = (35, 105, 35)
+    line_color = (215, 235, 215)
+    cv2.rectangle(canvas, (0, 0), (w - 1, h - 1), line_color, 2)
+    cv2.line(canvas, (w // 2, 0), (w // 2, h), line_color, 2)
+    cv2.circle(canvas, (w // 2, h // 2), int(9.15 * min(sx, sy)), line_color, 2)
     for x in (0, 16.5, 88.5, 105):
-        cv2.rectangle(canvas, (int(x * sx), int(13.84 * sy)), (int(x * sx), int(54.16 * sy)), (35, 120, 35), 2)
+        cv2.rectangle(canvas, (int(x * sx), int(13.84 * sy)), (int(x * sx), int(54.16 * sy)), line_color, 2)
     return canvas
 
 
