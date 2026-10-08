@@ -92,7 +92,7 @@ export class UploadComponent implements OnInit {
   private api = inject(ApiService);
   private router = inject(Router);
 
-  pipelineMode = 'mock';
+  pipelineMode = 'real';
   isDragging = false;
   isUploading = false;
   uploadProgress = 0;
@@ -101,7 +101,7 @@ export class UploadComponent implements OnInit {
   ngOnInit(): void {
     this.api.getHealth().subscribe({
       next: (res) => this.pipelineMode = res.pipeline_mode,
-      error: () => this.pipelineMode = 'mock'
+      error: () => this.pipelineMode = 'real'
     });
   }
 

@@ -4,76 +4,12 @@ import os
 import sys
 import uuid
 from datetime import datetime, timezone
-
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
 from app.db import SessionLocal
 from app.models import Match, MatchResult
-from app.pipeline.aggregate import compress_trajectories
-from app.pipeline.base import PipelineContext
-from app.pipeline.mock import MockPipeline
 from app.schemas import MatchResultsResponse
-
-
-def seed(db: Session = None):
-    """Creates one completed mock match in DB for demo purposes."""
-    db_created = False
-    if db is None:
-        db = SessionLocal()
-        db_created = True
-    try:
-        # Check if seed match already exists
-        existing_seed = db.query(Match).filter(Match.original_filename == "seeded_demo_match.mp4").first()
-        if existing_seed:
-            print(f"Seed match already exists (ID: {existing_seed.id}). Skipping.")
-            return
-
-        match_id = uuid.uuid4()
-        match_str = str(match_id)
-        print(f"Generating seeded mock match (ID: {match_str})...")
-
-        pipeline = MockPipeline()
-        ctx = PipelineContext()
-        results, trajectories_obj = pipeline.run(
-            video_path=None,
-            match_id=match_str,
-            ctx=ctx
-        )
-
-        match_obj = Match(
-            id=match_id,
-            original_filename="seeded_demo_match.mp4",
-            video_path=None,
-            status="completed",
-            progress=100,
-            progress_message="Seed match ready",
-            pipeline_mode="mock",
-            video_fps=25.0,
-            video_width=1280,
-            video_height=720,
-            video_duration_s=results.meta.duration_s,
-            completed_at=datetime.now(timezone.utc)
-        )
-        db.add(match_obj)
-
-        result_row = MatchResult(
-            match_id=match_id,
-            schema_version=results.schema_version,
-            calibration=results.meta.calibration,
-            summary=results.possession.summary.model_dump(),
-            tracks=[t.model_dump() for t in results.tracks],
-            heatmaps=results.heatmaps.model_dump(),
-            possession=results.possession.model_dump(),
-            trajectories=compress_trajectories(trajectories_obj)
-        )
-        db.add(result_row)
-        db.commit()
-
-        print(f"Successfully seeded match {match_str}")
-    finally:
-        if db_created:
-            db.close()
 
 def import_results(file_path: str, name: str = None, db: Session = None):
     """Imports an external results.json file after validating against Pydantic schema."""
@@ -155,9 +91,6 @@ def main():
     parser = argparse.ArgumentParser(description="Football Intelligence Dashboard CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # seed
-    subparsers.add_parser("seed", help="Seed database with one completed mock match")
-
     # import-results
     import_parser = subparsers.add_parser("import-results", help="Import external results JSON file")
     import_parser.add_argument("--file", required=True, help="Path to results.json file")
@@ -168,9 +101,7 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "seed":
-        seed()
-    elif args.command == "import-results":
+    if args.command == "import-results":
         import_results(args.file, args.name)
     elif args.command == "export-schema":
         export_schema()

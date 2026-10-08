@@ -1,4 +1,4 @@
-.PHONY: setup migrate seed dev test schema import lint
+.PHONY: setup migrate dev test schema import lint
 
 VENV = backend/.venv
 PYTHON = $(VENV)/bin/python
@@ -15,9 +15,6 @@ setup:
 
 migrate:
 	cd backend && ../$(ALEMBIC) upgrade head
-
-seed:
-	cd backend && ../$(PYTHON) -m app.cli seed
 
 dev:
 	$(HONCHO) -f Procfile.dev start

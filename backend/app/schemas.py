@@ -38,7 +38,7 @@ class MatchProgressUpdate(BaseModel):
 # --- Results JSON Schemas ---
 
 class ResultsMeta(BaseModel):
-    pipeline_mode: str  # mock | real | imported
+    pipeline_mode: str  # real | imported
     calibration: str = "naive"
     duration_s: float
     sample_fps: float

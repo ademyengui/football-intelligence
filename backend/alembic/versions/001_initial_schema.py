@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column('progress', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('progress_message', sa.String(length=255), nullable=True),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('pipeline_mode', sa.String(length=32), nullable=False, server_default='mock'),
+        sa.Column('pipeline_mode', sa.String(length=32), nullable=False, server_default='real'),
         sa.Column('video_fps', sa.Float(), nullable=True),
         sa.Column('video_width', sa.Integer(), nullable=True),
         sa.Column('video_height', sa.Integer(), nullable=True),

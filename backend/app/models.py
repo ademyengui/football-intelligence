@@ -30,7 +30,7 @@ class Match(Base):
     progress = Column(Integer, nullable=False, default=0)
     progress_message = Column(String(255), nullable=True)
     error_message = Column(Text, nullable=True)
-    pipeline_mode = Column(String(32), nullable=False, default="mock")  # mock|real|imported
+    pipeline_mode = Column(String(32), nullable=False, default="real")  # real|imported
     video_fps = Column(Float, nullable=True)
     video_width = Column(Integer, nullable=True)
     video_height = Column(Integer, nullable=True)

@@ -6,7 +6,7 @@ export interface Match {
   progress: number;
   progress_message?: string | null;
   error_message?: string | null;
-  pipeline_mode: 'mock' | 'real' | 'imported';
+  pipeline_mode: 'real' | 'imported';
   video_fps?: number | null;
   video_width?: number | null;
   video_height?: number | null;

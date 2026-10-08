@@ -8,13 +8,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_BYTES: int = 2147483648  # 2 GB
     ALLOWED_EXTENSIONS: str = ".mp4,.mkv"
     CORS_ORIGINS: str = "http://localhost:4200"
-    PIPELINE_MODE: str = "mock"  # mock | real
+    PIPELINE_MODE: str = "real"  # real
     STALE_JOB_SECONDS: int = 300
     JOB_TIMEOUT_SECONDS: int = 7200
-
-    # Mock settings
-    MOCK_DURATION_SECONDS: float = 120.0
-    MOCK_RUN_SECONDS: float = 20.0
 
     # Real pipeline settings
     ROBOFLOW_API_KEY: str = ""

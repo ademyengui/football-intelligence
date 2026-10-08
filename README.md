@@ -8,9 +8,8 @@ Post-match football analytics platform built with **FastAPI**, **RQ**, and **Ang
 
 - **Backend:** FastAPI, SQLAlchemy 2.0 (PostgreSQL), RQ + Redis worker, OpenCV, scikit-learn, Pydantic v2.
 - **Frontend:** Angular 22 (Standalone Components & Signals), Tailwind CSS, Plotly.js (105m x 68m pitch overlay).
-- **Pluggable Pipeline:**
-  - **Mock Mode:** Instant deterministic 24-track random walk simulation for offline development and UI testing.
-  - **Real Mode:** Roboflow YOLO detection + ByteTrack + NaiveCalibrator + Lab colour KMeans team classification + foot-to-ball possession engine.
+- **Pipeline modes:**
+  - **Real Mode:** Roboflow football detection and pitch-keypoint models + ByteTrack + team classification + pitch analytics.
   - **Imported Mode:** Import results JSON directly from external Kaggle or Colab notebooks.
 
 ---
@@ -42,11 +41,8 @@ make setup
 make migrate
 ```
 
-### 3. Seed Mock Match & Run Development Server
+### 3. Run Development Server
 ```bash
-# Seed one completed mock match for immediate dashboard viewing
-make seed
-
 # Start API, RQ Worker, and Angular Web App concurrently via Honcho
 make dev
 ```
@@ -78,10 +74,10 @@ make test
 
 ## Known Limitations (v1.0)
 
-1. **Approximate Calibration:** Positions and distances use `NaiveCalibrator` (linear pixel-to-pitch mapping), which does not compensate for camera panning or zooming.
+1. **Keypoint Calibration:** Pitch projection depends on enough visible field keypoints; clips with insufficient keypoints fail clearly rather than returning synthetic positions.
 2. **Colour-Based Team Classification:** Team classification uses median Lab colour clustering of upper-body crops. Goalkeepers and referees are categorized as `role: "other"` and do not contribute to team possession.
-3. **ID Fragmentation:** ByteTrack IDs can fragment across lost frames. Use the **Minimum Duration Slider** on the Stats tab to filter out short fragments.
-4. **Hardware Compute Caps:** Real mode inference on laptop GPUs/CPUs is resource-intensive and capped to short clips (`MAX_CLIP_SECONDS=120`).
+3. **ID Fragmentation:** ByteTrack IDs can fragment across lost frames. Use the **Minimum Duration Slider** on the Stats tab to filter short fragments.
+4. **Hardware Compute Caps:** Inference is resource-intensive and capped to short clips (`MAX_CLIP_SECONDS=120`).
 
 ---
 

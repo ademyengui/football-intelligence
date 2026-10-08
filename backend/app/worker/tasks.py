@@ -6,7 +6,7 @@ from app.db import SessionLocal
 from app.models import Match, MatchResult
 from app.pipeline.aggregate import compress_trajectories
 from app.pipeline.base import PipelineContext
-from app.pipeline.mock import MockPipeline
+from app.pipeline.real import RealPipeline
 from app.services.progress import ProgressReporter
 
 
@@ -27,14 +27,10 @@ def process_match(match_id: str):
 
         pipeline_mode = settings.PIPELINE_MODE
 
-        if pipeline_mode == "mock":
-            pipeline = MockPipeline()
-        elif pipeline_mode == "real":
-            # Dynamic import of real pipeline to avoid eager loading ML packages
-            from app.pipeline.real import RealPipeline
-            pipeline = RealPipeline()
-        else:
-            raise ValueError(f"Unsupported PIPELINE_MODE: {pipeline_mode}")
+        if pipeline_mode != "real":
+            raise ValueError(f"Unsupported PIPELINE_MODE: {pipeline_mode}. Only real processing is available.")
+
+        pipeline = RealPipeline()
 
         def progress_cb(pct: int, msg: str):
             reporter.report(pct, msg, status="processing")
