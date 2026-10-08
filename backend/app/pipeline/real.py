@@ -60,7 +60,7 @@ class RealPipeline(BasePipeline):
         detector = Detector()
         field_detector = FieldKeypointDetector()
         calibrator = HomographyCalibrator()
-        team_classifier = TeamClassifier()
+        team_classifier = TeamClassifier(device="cpu")
 
         # Initialize ByteTrack
         byte_tracker = sv.ByteTrack(
@@ -72,7 +72,7 @@ class RealPipeline(BasePipeline):
 
         # Tracking state
         raw_track_points: dict[int, list[tuple[float, float, float]]] = {} # tid -> list of (t, x_m, y_m)
-        raw_track_crops: dict[int, list[np.ndarray]] = {} # tid -> list of crop Lab vectors
+        raw_track_crops: dict[int, list[np.ndarray]] = {} # tid -> player crops
         raw_track_stats: dict[int, dict] = {} # tid -> {'classes': [], 'frames': int}
         raw_track_boxes: dict[int, dict[float, tuple[tuple[float, float], float]]] = {} # tid -> {t: (foot_pos, box_h)}
 
@@ -147,13 +147,15 @@ class RealPipeline(BasePipeline):
                             "bbox": [float(value) for value in bbox],
                             "foot_px": foot_px,
                             "pitch_pos": (x_m, y_m),
+                            "pitch_pos_native": calibrator.pixel_to_pitch_native(foot_px),
+                            "detector_hint": cname,
                         })
 
-                        # Collect upper-body crop color (up to 15 per track)
+                        # The notebook fits TeamClassifier on player crops.
                         if len(raw_track_crops[tid]) < 15:
-                            lab_color = team_classifier.extract_upper_body_color(frame_proc, bbox)
-                            if lab_color is not None:
-                                raw_track_crops[tid].append(lab_color)
+                            crop = sv.crop_image(frame_proc, bbox)
+                            if crop.size:
+                                raw_track_crops[tid].append(crop)
 
                         frame_cands.append({
                             'track_id': tid,
@@ -163,11 +165,13 @@ class RealPipeline(BasePipeline):
 
                 ball_pos = best_ball['center'] if best_ball else None
                 ball_pitch_pos = calibrator.pixel_to_pitch(ball_pos) if ball_pos and calibrator.matrix is not None else None
+                ball_pitch_native = calibrator.pixel_to_pitch_native(ball_pos) if ball_pos and calibrator.matrix is not None else None
                 frame_observations.append({
                     't': t_curr,
                     'ball_pos': ball_pos,
                     'ball_px': ball_pos,
                     'ball_pitch_pos': ball_pitch_pos,
+                    'ball_pitch_native': ball_pitch_native,
                     'candidates': frame_cands,
                     'detections': frame_detections
                 })
@@ -203,8 +207,39 @@ class RealPipeline(BasePipeline):
                 'majority_class': maj_class
             }
 
-        # Classify teams
-        track_classifications = team_classifier.classify_tracks(raw_track_crops, track_stats_compiled)
+        # Classify teams using the notebook's fitted SigLIP/UMAP/KMeans model.
+        all_crops = [crop for crops in raw_track_crops.values() for crop in crops]
+        team_classifier.fit(all_crops)
+        track_classifications = {}
+        player_team_by_track: dict[int, int] = {}
+        for tid, crops in raw_track_crops.items():
+            stats = track_stats_compiled[tid]
+            if stats["majority_class"] in ("goalkeeper", "referee"):
+                track_classifications[tid] = (None, "other", stats["majority_class"])
+                continue
+            team_id = team_classifier.majority_team(team_classifier.predict(crops))
+            if team_id is None:
+                track_classifications[tid] = (None, "other", "unknown")
+            else:
+                player_team_by_track[tid] = team_id
+                track_classifications[tid] = ("A" if team_id == 0 else "B", "outfield", "player")
+
+        player_centroids = {}
+        for team_id in (0, 1):
+            points = [
+                raw_track_points[tid][-1][1:]
+                for tid, assigned in player_team_by_track.items()
+                if assigned == team_id and raw_track_points[tid]
+            ]
+            if points:
+                player_centroids[team_id] = np.mean(np.asarray(points), axis=0)
+        for tid, stats in track_stats_compiled.items():
+            if stats["majority_class"] != "goalkeeper":
+                continue
+            point = np.asarray(raw_track_points[tid][-1][1:])
+            if len(player_centroids) == 2:
+                team_id = min(player_centroids, key=lambda key: np.linalg.norm(point - player_centroids[key]))
+                track_classifications[tid] = ("A" if team_id == 0 else "B", "outfield", "goalkeeper")
 
         ctx.report(92, "Aggregating tracks, heatmaps & possession")
 

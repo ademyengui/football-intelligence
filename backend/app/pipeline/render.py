@@ -7,23 +7,13 @@ import numpy as np
 
 from app.config import settings
 from app.schemas import ArtifactItem
+from sports.annotators.soccer import draw_pitch, draw_pitch_voronoi_diagram, draw_points_on_pitch
+from sports.configs.soccer import SoccerPitchConfiguration
+import supervision as sv
 
 TEAM_COLORS = {"A": (255, 191, 0), "B": (147, 20, 255), None: (180, 180, 180)}
 BALL_COLOR = (0, 215, 255)
 PITCH_COLOR = (70, 70, 70)
-
-
-def _pitch(canvas: np.ndarray) -> np.ndarray:
-    h, w = canvas.shape[:2]
-    sx, sy = w / 105.0, h / 68.0
-    canvas[:] = (35, 105, 35)
-    line_color = (215, 235, 215)
-    cv2.rectangle(canvas, (0, 0), (w - 1, h - 1), line_color, 2)
-    cv2.line(canvas, (w // 2, 0), (w // 2, h), line_color, 2)
-    cv2.circle(canvas, (w // 2, h // 2), int(9.15 * min(sx, sy)), line_color, 2)
-    for x in (0, 16.5, 88.5, 105):
-        cv2.rectangle(canvas, (int(x * sx), int(13.84 * sy)), (int(x * sx), int(54.16 * sy)), line_color, 2)
-    return canvas
 
 
 def _write_video(path: Path, frames: list[np.ndarray], fps: float, size: tuple[int, int]) -> None:
@@ -87,11 +77,17 @@ def render_artifacts(
     radar: list[np.ndarray] = []
     voronoi: list[np.ndarray] = []
     ball_path: list[tuple[float, float]] = []
+    config = SoccerPitchConfiguration()
+    blue = sv.Color.from_hex("00BFFF")
+    pink = sv.Color.from_hex("FF1493")
+    yellow = sv.Color.from_hex("FFD700")
+    white = sv.Color.WHITE
 
     for frame, observation in zip(frames, observations):
         scene = frame.copy()
-        radar_scene = _pitch(np.zeros((680, 1050, 3), dtype=np.uint8))
+        radar_scene = draw_pitch(config)
         team_points: dict[str, list[tuple[float, float]]] = {"A": [], "B": []}
+        referee_points: list[tuple[float, float]] = []
         for detection in observation.get("detections", []):
             tid = detection["track_id"]
             team, role, _ = classifications.get(tid, (None, "other", "unknown"))
@@ -99,40 +95,38 @@ def render_artifacts(
             x1, y1, x2, y2 = map(int, detection["bbox"])
             cv2.ellipse(scene, ((x1 + x2) // 2, y2), ((x2 - x1) // 2, max(3, (y2 - y1) // 8)), 0, 0, 360, color, 2)
             cv2.putText(scene, f"#{tid}", (x1, max(15, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
-            if team in team_points and role == "outfield":
-                point = detection["pitch_pos"]
+            point = detection.get("pitch_pos_native")
+            if point and team in team_points and role == "outfield":
                 team_points[team].append(point)
-                px, py = int(point[0] * 10), int(point[1] * 10)
-                cv2.circle(radar_scene, (px, py), 8, color, -1)
-            elif role == "other":
-                point = detection.get("pitch_pos")
-                if point:
-                    cv2.circle(radar_scene, (int(point[0] * 10), int(point[1] * 10)), 6, (220, 220, 220), 2)
+            elif point and detection.get("detector_hint") == "referee":
+                referee_points.append(point)
 
-        ball = observation.get("ball_pitch_pos")
+        ball = observation.get("ball_pitch_native")
         if ball:
-            ball_path.append(ball)
-            bx, by = int(ball[0] * 10), int(ball[1] * 10)
+            ball_path.append(observation["ball_pitch_pos"])
             ball_x, ball_y = map(int, observation["ball_px"])
             triangle = np.array(
                 [[ball_x, ball_y - 10], [ball_x - 8, ball_y + 6], [ball_x + 8, ball_y + 6]],
                 dtype=np.int32,
             )
             cv2.polylines(scene, [triangle], True, BALL_COLOR, 2)
-            cv2.circle(radar_scene, (bx, by), 6, BALL_COLOR, -1)
-
-        vor = radar_scene.copy()
-        yy, xx = np.indices((680, 1050))
+        radar_scene = draw_points_on_pitch(config, np.asarray([ball]) if ball else np.empty((0, 2)), white, sv.Color.BLACK, 10, pitch=radar_scene)
+        radar_scene = draw_points_on_pitch(config, np.asarray(team_points["A"]), blue, sv.Color.BLACK, 16, pitch=radar_scene)
+        radar_scene = draw_points_on_pitch(config, np.asarray(team_points["B"]), pink, sv.Color.BLACK, 16, pitch=radar_scene)
+        radar_scene = draw_points_on_pitch(config, np.asarray(referee_points), yellow, sv.Color.BLACK, 16, pitch=radar_scene)
+        vor = draw_pitch(config)
         if team_points["A"] and team_points["B"]:
-            a = np.asarray(team_points["A"]) * np.array([10, 10])
-            b = np.asarray(team_points["B"]) * np.array([10, 10])
-            da = np.min((xx[None] - a[:, 0, None, None]) ** 2 + (yy[None] - a[:, 1, None, None]) ** 2, axis=0)
-            db = np.min((xx[None] - b[:, 0, None, None]) ** 2 + (yy[None] - b[:, 1, None, None]) ** 2, axis=0)
-            mask = da <= db
-            overlay = np.zeros_like(vor)
-            overlay[mask] = TEAM_COLORS["A"]
-            overlay[~mask] = TEAM_COLORS["B"]
-            vor = cv2.addWeighted(overlay, 0.28, vor, 0.72, 0)
+            vor = draw_pitch_voronoi_diagram(
+                config=config,
+                team_1_xy=np.asarray(team_points["A"]),
+                team_2_xy=np.asarray(team_points["B"]),
+                team_1_color=blue,
+                team_2_color=pink,
+                pitch=vor,
+            )
+        vor = draw_points_on_pitch(config, np.asarray([ball]) if ball else np.empty((0, 2)), white, sv.Color.BLACK, 10, pitch=vor)
+        vor = draw_points_on_pitch(config, np.asarray(team_points["A"]), blue, sv.Color.WHITE, 16, pitch=vor)
+        vor = draw_points_on_pitch(config, np.asarray(team_points["B"]), pink, sv.Color.WHITE, 16, pitch=vor)
         radar.append(radar_scene)
         voronoi.append(vor)
         annotated.append(scene)
@@ -142,9 +136,10 @@ def render_artifacts(
     voronoi_path = output_dir / "voronoi.mp4"
     ball_path_file = output_dir / "ball-path.png"
     _write_video(annotated_path, annotated, sample_fps, (width, height))
-    _write_video(radar_path, radar, sample_fps, (1050, 680))
-    _write_video(voronoi_path, voronoi, sample_fps, (1050, 680))
-    path_scene = _pitch(np.zeros((680, 1050, 3), dtype=np.uint8))
+    radar_height, radar_width = radar[0].shape[:2]
+    _write_video(radar_path, radar, sample_fps, (radar_width, radar_height))
+    _write_video(voronoi_path, voronoi, sample_fps, (radar_width, radar_height))
+    path_scene = draw_pitch(config)
     if len(ball_path) > 1:
         points = np.asarray(ball_path, dtype=np.float32) * 10
         cv2.polylines(path_scene, [points.astype(np.int32)], False, BALL_COLOR, 3)
@@ -152,7 +147,7 @@ def render_artifacts(
 
     return [
         ArtifactItem(kind="annotated_video", filename=f"artifacts/{match_id}/annotated.mp4", url=f"/api/v1/matches/{match_id}/artifacts/annotated_video", media_type="video/mp4", width=width, height=height),
-        ArtifactItem(kind="radar_video", filename=f"artifacts/{match_id}/radar.mp4", url=f"/api/v1/matches/{match_id}/artifacts/radar_video", media_type="video/mp4", width=1050, height=680),
-        ArtifactItem(kind="voronoi_video", filename=f"artifacts/{match_id}/voronoi.mp4", url=f"/api/v1/matches/{match_id}/artifacts/voronoi_video", media_type="video/mp4", width=1050, height=680),
-        ArtifactItem(kind="ball_path_image", filename=f"artifacts/{match_id}/ball-path.png", url=f"/api/v1/matches/{match_id}/artifacts/ball_path_image", media_type="image/png", width=1050, height=680),
+        ArtifactItem(kind="radar_video", filename=f"artifacts/{match_id}/radar.mp4", url=f"/api/v1/matches/{match_id}/artifacts/radar_video", media_type="video/mp4", width=1300, height=800),
+        ArtifactItem(kind="voronoi_video", filename=f"artifacts/{match_id}/voronoi.mp4", url=f"/api/v1/matches/{match_id}/artifacts/voronoi_video", media_type="video/mp4", width=1300, height=800),
+        ArtifactItem(kind="ball_path_image", filename=f"artifacts/{match_id}/ball-path.png", url=f"/api/v1/matches/{match_id}/artifacts/ball_path_image", media_type="image/png", width=1300, height=800),
     ]

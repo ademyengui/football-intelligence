@@ -1,40 +1,24 @@
+import cv2
+import numpy as np
+
 
 class NaiveCalibrator:
-    """
-    NaiveCalibrator: Linear mapping from pixel coordinates to 105m x 68m pitch space.
-    Foot point = midpoint of bottom edge of bounding box: ((x1 + x2)/2, y2).
-    """
     def __init__(self, pitch_width_m: float = 105.0, pitch_height_m: float = 68.0):
         self.pitch_width_m = pitch_width_m
         self.pitch_height_m = pitch_height_m
 
-    def get_foot_point_px(self, bbox: list[float] | tuple[float, float, float, float]) -> tuple[float, float]:
-        """Calculates foot point (midpoint of bottom edge) from bounding box [x1, y1, x2, y2]."""
+    def get_foot_point_px(self, bbox):
         x1, y1, x2, y2 = bbox
-        foot_x = (x1 + x2) / 2.0
-        foot_y = float(y2)
-        return foot_x, foot_y
+        return (x1 + x2) / 2.0, float(y2)
 
-    def pixel_to_pitch(self, foot_px: tuple[float, float], frame_size: tuple[int, int]) -> tuple[float, float]:
-        """Maps pixel (x, y) on a frame of size (frame_w, frame_h) to pitch metres (x_m, y_m)."""
+    def pixel_to_pitch(self, foot_px, frame_size):
         foot_x, foot_y = foot_px
         frame_w, frame_h = frame_size
-
-        if frame_w <= 0 or frame_h <= 0:
-            return 0.0, 0.0
-
-        x_m = (foot_x / float(frame_w)) * self.pitch_width_m
-        y_m = (foot_y / float(frame_h)) * self.pitch_height_m
-
-        # Clip to pitch boundaries
-        x_m = max(0.0, min(self.pitch_width_m, x_m))
-        y_m = max(0.0, min(self.pitch_height_m, y_m))
-
-        return round(x_m, 1), round(y_m, 1)
+        return round((foot_x / frame_w) * self.pitch_width_m, 1), round((foot_y / frame_h) * self.pitch_height_m, 1)
 
 
 class HomographyCalibrator:
-    """Projects frame coordinates onto the notebook's configured pitch geometry."""
+    """Notebook ViewTransformer equivalent with meter and native pitch coordinates."""
 
     def __init__(self, confidence_threshold: float = 0.5, min_points: int = 4):
         from sports.configs.soccer import SoccerPitchConfiguration
@@ -49,31 +33,28 @@ class HomographyCalibrator:
         return (x1 + x2) / 2.0, float(y2)
 
     def update(self, frame_points, confidences) -> bool:
-        import cv2
-        import numpy as np
-
         frame_points = np.asarray(frame_points, dtype=np.float32)
         confidences = np.asarray(confidences, dtype=np.float32)
         mask = confidences > self.confidence_threshold
         if int(np.count_nonzero(mask)) < self.min_points:
             return False
-
-        source = np.asarray(self.config.vertices, dtype=np.float32)[mask]
-        target = frame_points[mask]
-        matrix, _ = cv2.findHomography(target, source, method=0)
+        source = frame_points[mask]
+        target = np.asarray(self.config.vertices, dtype=np.float32)[mask]
+        matrix, _ = cv2.findHomography(source, target, method=0)
         if matrix is None or not np.isfinite(matrix).all():
             return False
         self.matrix = matrix
         return True
 
-    def pixel_to_pitch(self, point_px) -> tuple[float, float]:
-        import cv2
-        import numpy as np
-
+    def pixel_to_pitch_native(self, point_px) -> tuple[float, float]:
         if self.matrix is None:
             raise ValueError("Pitch calibration is unavailable: no reliable field keypoints detected")
         point = np.asarray([[point_px]], dtype=np.float32)
         projected = cv2.perspectiveTransform(point, self.matrix)[0, 0]
-        x_m = float(np.clip(projected[0] / self.config.length * 105.0, 0.0, 105.0))
-        y_m = float(np.clip(projected[1] / self.config.width * 68.0, 0.0, 68.0))
-        return round(x_m, 1), round(y_m, 1)
+        return float(projected[0]), float(projected[1])
+
+    def pixel_to_pitch(self, point_px) -> tuple[float, float]:
+        x, y = self.pixel_to_pitch_native(point_px)
+        return round(float(np.clip(x / self.config.length * 105.0, 0.0, 105.0)), 1), round(
+            float(np.clip(y / self.config.width * 68.0, 0.0, 68.0)), 1
+        )
