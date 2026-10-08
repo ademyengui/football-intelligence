@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: str = ".mp4,.mkv"
     CORS_ORIGINS: str = "http://localhost:4200"
     PIPELINE_MODE: str = "real"  # real
-    STALE_JOB_SECONDS: int = 300
+    STALE_JOB_SECONDS: int = 1800
     JOB_TIMEOUT_SECONDS: int = 7200
 
     # Real pipeline settings

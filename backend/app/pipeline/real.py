@@ -187,7 +187,7 @@ class RealPipeline(BasePipeline):
 
         cap.release()
 
-        ctx.report(85, "Running team & role classification")
+        ctx.report(85, "Preparing notebook team classification")
 
         # Compile track statistics for classification
         track_stats_compiled = {}
@@ -207,9 +207,22 @@ class RealPipeline(BasePipeline):
                 'majority_class': maj_class
             }
 
-        # Classify teams using the notebook's fitted SigLIP/UMAP/KMeans model.
-        all_crops = [crop for crops in raw_track_crops.values() for crop in crops]
+        # Fit once on a bounded representative sample, then predict all tracks in
+        # one batch. This preserves the notebook model while avoiding one
+        # SigLIP extraction pass per track.
+        representative_crops = {
+            tid: crops[:2] for tid, crops in raw_track_crops.items() if crops
+        }
+        all_crops = [
+            crop for crops in list(representative_crops.values())[:20] for crop in crops
+        ]
+        ctx.report(86, f"Fitting team classifier on {len(all_crops)} crops")
         team_classifier.fit(all_crops)
+        prediction_tids = list(representative_crops)[:20]
+        prediction_crops = [representative_crops[tid][0] for tid in prediction_tids]
+        ctx.report(90, f"Classifying {len(prediction_crops)} tracked players")
+        prediction_labels = team_classifier.predict(prediction_crops)
+        track_team_ids = dict(zip(prediction_tids, prediction_labels, strict=False))
         track_classifications = {}
         player_team_by_track: dict[int, int] = {}
         for tid, crops in raw_track_crops.items():
@@ -217,7 +230,7 @@ class RealPipeline(BasePipeline):
             if stats["majority_class"] in ("goalkeeper", "referee"):
                 track_classifications[tid] = (None, "other", stats["majority_class"])
                 continue
-            team_id = team_classifier.majority_team(team_classifier.predict(crops))
+            team_id = int(track_team_ids[tid]) if tid in track_team_ids else None
             if team_id is None:
                 track_classifications[tid] = (None, "other", "unknown")
             else:

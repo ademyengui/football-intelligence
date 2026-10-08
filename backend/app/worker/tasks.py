@@ -77,6 +77,7 @@ def process_match(match_id: str):
         match_obj.status = "completed"
         match_obj.progress = 100
         match_obj.progress_message = "Processing complete"
+        match_obj.error_message = None
         match_obj.completed_at = datetime.now(timezone.utc)
         db.commit()
 
