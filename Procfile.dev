@@ -1,3 +1,3 @@
-api: cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
-worker: cd backend && .venv/bin/rq worker --url redis://localhost:6379/0
+api: cd backend && .venv/bin/python -m uvicorn app.main:app --reload --port 8000
+worker: cd backend && .venv/bin/python -c 'import sys; from rq.cli import main; sys.argv=["rq","worker","--url","redis://localhost:6379/0"]; main()'
 web: cd frontend && PORT=4200 npx ng serve --port 4200 --host 0.0.0.0

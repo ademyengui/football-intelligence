@@ -14,10 +14,10 @@ setup:
 	cd frontend && npm install
 
 migrate:
-	cd backend && ../$(ALEMBIC) upgrade head
+	cd backend && ../$(PYTHON) -m alembic upgrade head
 
 dev:
-	$(HONCHO) -f Procfile.dev start
+	$(PYTHON) -m honcho -f Procfile.dev start
 
 test:
 	cd backend && ../$(PYTEST) tests/ -v

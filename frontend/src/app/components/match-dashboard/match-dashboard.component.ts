@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -16,6 +16,18 @@ import { PossessionTimelineComponent } from '../../charts/possession-timeline.co
   imports: [CommonModule, FormsModule, RouterLink, PitchHeatmapComponent, PossessionTimelineComponent],
   template: `
     <div class="mx-auto max-w-7xl space-y-6 px-4 py-8">
+      @if (isLoading) {
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-sm text-slate-300">
+          Loading match analytics...
+        </div>
+      }
+
+      @if (loadError) {
+        <div class="rounded-2xl border border-rose-500/30 bg-rose-950/30 p-6 text-sm text-rose-200">
+          {{ loadError }}
+        </div>
+      }
+
       <!-- Header Banner -->
       @if (match) {
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
@@ -375,9 +387,12 @@ export class MatchDashboardComponent implements OnInit, OnDestroy {
   public api = inject(ApiService);
   private ws = inject(WebsocketService);
   private route = inject(ActivatedRoute);
+  private changeDetector = inject(ChangeDetectorRef);
 
   match: Match | null = null;
   results: MatchResults | null = null;
+  isLoading = false;
+  loadError: string | null = null;
   activeTab: 'heatmaps' | 'stats' | 'possession' = 'heatmaps';
 
   teamAName = 'Team A';
@@ -407,16 +422,25 @@ export class MatchDashboardComponent implements OnInit, OnDestroy {
   }
 
   loadMatch(matchId: string): void {
+    this.isLoading = true;
+    this.loadError = null;
     this.api.getMatch(matchId).subscribe({
       next: (m) => {
         this.match = m;
+        this.isLoading = false;
+        this.changeDetector.detectChanges();
         if (m.status === 'completed') {
           this.loadResults(matchId);
         } else if (m.status !== 'failed') {
           this.subscribeProgress(matchId);
         }
       },
-      error: (err) => console.error('Error loading match', err)
+      error: (err) => {
+        console.error('Error loading match', err);
+        this.isLoading = false;
+        this.loadError = 'Unable to load this match. Please return to the matches list and try again.';
+        this.changeDetector.detectChanges();
+      }
     });
   }
 
@@ -428,6 +452,7 @@ export class MatchDashboardComponent implements OnInit, OnDestroy {
           this.match.progress = msg.progress;
           this.match.progress_message = msg.message;
           this.match.error_message = msg.error;
+          this.changeDetector.detectChanges();
         }
         if (msg.status === 'completed') {
           this.loadResults(matchId);
@@ -437,9 +462,19 @@ export class MatchDashboardComponent implements OnInit, OnDestroy {
   }
 
   loadResults(matchId: string): void {
+    this.isLoading = true;
     this.api.getMatchResults(matchId).subscribe({
-      next: (r) => this.results = r,
-      error: (err) => console.error('Error loading results', err)
+      next: (r) => {
+        this.results = r;
+        this.isLoading = false;
+        this.changeDetector.detectChanges();
+      },
+      error: (err) => {
+        console.error('Error loading results', err);
+        this.isLoading = false;
+        this.loadError = 'Match processing completed, but its analytics could not be loaded.';
+        this.changeDetector.detectChanges();
+      }
     });
   }
 
