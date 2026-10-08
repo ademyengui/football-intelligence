@@ -14,15 +14,20 @@ class Detector:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[Detector] Initialized detector on device: {self.device}")
         self.model = None
+        self.model_id = "/".join(settings.ROBOFLOW_MODEL_ID.split("/")[-2:])
 
     def load_model(self):
         if self.model is None:
             try:
-                from inference import get_model
-                model_id = settings.ROBOFLOW_MODEL_ID
-                api_key = settings.ROBOFLOW_API_KEY
-                self.model = get_model(model_id=model_id, api_key=api_key)
-                print(f"[Detector] Loaded Roboflow model '{model_id}' on {self.device}")
+                from inference_sdk import InferenceHTTPClient
+
+                if not settings.ROBOFLOW_API_KEY:
+                    raise ValueError("ROBOFLOW_API_KEY is required for real pipeline processing")
+                self.model = InferenceHTTPClient.init(
+                    api_url="https://serverless.roboflow.com",
+                    api_key=settings.ROBOFLOW_API_KEY,
+                )
+                print(f"[Detector] Connected to Roboflow model '{self.model_id}' on {self.device}")
             except Exception as e:
                 print(f"[Detector] Failed to load Roboflow model: {e}")
                 raise e
@@ -36,21 +41,26 @@ class Detector:
         if self.model is None:
             self.load_model()
 
-        results = self.model.infer(frame_bgr, confidence=settings.DETECTION_CONFIDENCE)
+        results = self.model.infer(
+            frame_bgr,
+            model_id=self.model_id,
+        )
 
         non_ball_dets = []
         best_ball_det = None
         best_ball_conf = -1.0
 
         if results and len(results) > 0:
-            predictions = getattr(results[0], 'predictions', []) or []
+            predictions = results.get("predictions", []) if isinstance(results, dict) else []
             for pred in predictions:
-                x = pred.x
-                y = pred.y
-                w = pred.width
-                h = pred.height
-                conf = pred.confidence
-                class_name = str(pred.class_name).lower()
+                x = pred["x"]
+                y = pred["y"]
+                w = pred["width"]
+                h = pred["height"]
+                conf = pred["confidence"]
+                if conf < settings.DETECTION_CONFIDENCE:
+                    continue
+                class_name = str(pred["class"]).lower()
 
                 x1 = x - w / 2.0
                 y1 = y - h / 2.0

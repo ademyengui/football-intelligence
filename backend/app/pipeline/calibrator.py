@@ -44,6 +44,10 @@ class HomographyCalibrator:
         self.min_points = min_points
         self.matrix = None
 
+    def get_foot_point_px(self, bbox):
+        x1, y1, x2, y2 = bbox
+        return (x1 + x2) / 2.0, float(y2)
+
     def update(self, frame_points, confidences) -> bool:
         import cv2
         import numpy as np

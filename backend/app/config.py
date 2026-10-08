@@ -16,8 +16,8 @@ class Settings(BaseSettings):
 
     # Real pipeline settings
     ROBOFLOW_API_KEY: str = ""
-    ROBOFLOW_MODEL_ID: str = "football-players-detection-3zvbc/11"
-    ROBOFLOW_FIELD_MODEL_ID: str = "football-field-detection-f07vi/14"
+    ROBOFLOW_MODEL_ID: str = "adems-workspace-p5l76/football-players-detection-3zvbc/11"
+    ROBOFLOW_FIELD_MODEL_ID: str = "adems-workspace-p5l76/football-field-detection-f07vi/14"
     DETECTION_CONFIDENCE: float = 0.3
     FRAME_STRIDE: int = 5
     MAX_CLIP_SECONDS: float = 120.0
