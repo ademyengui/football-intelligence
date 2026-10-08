@@ -9,7 +9,7 @@ Post-match football analytics platform built with **FastAPI**, **RQ**, and **Ang
 - **Backend:** FastAPI, SQLAlchemy 2.0 (PostgreSQL), RQ + Redis worker, OpenCV, scikit-learn, Pydantic v2.
 - **Frontend:** Angular 22 (Standalone Components & Signals), Tailwind CSS, Plotly.js (105m x 68m pitch overlay).
 - **Pipeline modes:**
-  - **Real Mode:** Roboflow football detection and pitch-keypoint models + ByteTrack + team classification + pitch analytics.
+  - **Real Mode:** Roboflow football detection and pitch-keypoint models + ByteTrack + team classification + pitch analytics. Completed matches also include the annotated tracking video, 2D radar video, Voronoi pitch-control video, and ball-path image from the notebook workflow.
   - **Imported Mode:** Import results JSON directly from external Kaggle or Colab notebooks.
 
 ---
@@ -41,7 +41,19 @@ make setup
 make migrate
 ```
 
-### 3. Run Development Server
+### 3. Configure and download real-mode dependencies
+Put the Roboflow key in `.env` as `ROBOFLOW_API_KEY`. The first real worker run downloads/caches the configured models:
+
+- `football-players-detection-3zvbc/11` (ball, player, goalkeeper, referee)
+- `football-field-detection-f07vi/14` (pitch keypoints)
+
+Install optional inference dependencies with:
+```bash
+backend/.venv/bin/python -m pip install -r backend/requirements-real.txt
+```
+The dependency file pins Pillow to `10.4.0` for compatibility. Model weights and caches remain outside this repository.
+
+### 4. Run Development Server
 ```bash
 # Start API, RQ Worker, and Angular Web App concurrently via Honcho
 make dev

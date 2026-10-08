@@ -1,5 +1,76 @@
 {
   "$defs": {
+    "ArtifactItem": {
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        }
+      },
+      "required": [
+        "kind",
+        "filename",
+        "media_type"
+      ],
+      "title": "ArtifactItem",
+      "type": "object"
+    },
     "HeatmapGrid": {
       "properties": {
         "width": {
@@ -266,6 +337,13 @@
     },
     "possession": {
       "$ref": "#/$defs/PossessionData"
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactItem"
+      },
+      "title": "Artifacts",
+      "type": "array"
     }
   },
   "required": [

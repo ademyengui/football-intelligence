@@ -63,6 +63,16 @@ export interface PossessionData {
   summary: PossessionSummary;
 }
 
+export interface ArtifactItem {
+  kind: 'annotated_video' | 'radar_video' | 'voronoi_video' | 'ball_path_image';
+  filename: string;
+  url?: string | null;
+  media_type: string;
+  width?: number | null;
+  height?: number | null;
+  duration_s?: number | null;
+}
+
 export interface ResultsMeta {
   pipeline_mode: string;
   calibration: string;
@@ -77,6 +87,7 @@ export interface MatchResults {
   tracks: TrackItem[];
   heatmaps: HeatmapsData;
   possession: PossessionData;
+  artifacts: ArtifactItem[];
 }
 
 export interface HealthResponse {

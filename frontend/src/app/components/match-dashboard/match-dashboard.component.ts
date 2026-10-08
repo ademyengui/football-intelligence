@@ -139,6 +139,23 @@ import { PossessionTimelineComponent } from '../../charts/possession-timeline.co
 
       <!-- Completed Dashboard View (3 Tabs) -->
       @if (results) {
+        @if (results.artifacts.length) {
+          <section class="grid gap-4 lg:grid-cols-2">
+            @for (artifact of results.artifacts; track artifact.kind) {
+              <article class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+                <div class="border-b border-slate-800 px-5 py-3">
+                  <h2 class="text-sm font-semibold text-white">{{ artifactTitle(artifact.kind) }}</h2>
+                </div>
+                @if (artifact.media_type.startsWith('video/')) {
+                  <video class="aspect-video w-full bg-black object-contain" controls preload="metadata" [src]="api.assetUrl(artifact.url)"></video>
+                } @else {
+                  <img class="w-full bg-black object-contain" [src]="api.assetUrl(artifact.url)" [alt]="artifactTitle(artifact.kind)" />
+                }
+              </article>
+            }
+          </section>
+        }
+
         <!-- Tabs & Team Customization Bar -->
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
           <!-- Tab Navigation -->
@@ -424,6 +441,15 @@ export class MatchDashboardComponent implements OnInit, OnDestroy {
       next: (r) => this.results = r,
       error: (err) => console.error('Error loading results', err)
     });
+  }
+
+  artifactTitle(kind: string): string {
+    return {
+      annotated_video: 'Annotated tracking video',
+      radar_video: '2D pitch radar',
+      voronoi_video: 'Voronoi pitch control',
+      ball_path_image: 'Ball path'
+    }[kind] || 'Match visual';
   }
 
   retryProcessing(): void {

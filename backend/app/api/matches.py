@@ -3,6 +3,7 @@ import uuid
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from rq import Queue
 from sqlalchemy.orm import Session
 
@@ -130,8 +131,23 @@ def get_match_results(match_id: UUID, db: Session = Depends(get_db)):
         meta=meta,
         tracks=tracks_data,
         heatmaps=heatmaps_data,
-        possession=possession_data
+        possession=possession_data,
+        artifacts=result_row.artifacts or []
     )
+
+
+@router.get("/{match_id}/artifacts/{kind}")
+def get_match_artifact(match_id: UUID, kind: str, db: Session = Depends(get_db)):
+    result_row = db.query(MatchResult).filter(MatchResult.match_id == match_id).first()
+    if not result_row:
+        raise HTTPException(status_code=404, detail="Match results record not found")
+    artifact = next((item for item in (result_row.artifacts or []) if item.get("kind") == kind), None)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    path = os.path.join(settings.UPLOAD_DIR, artifact["filename"])
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Artifact file is unavailable")
+    return FileResponse(path, media_type=artifact.get("media_type"), filename=os.path.basename(path))
 
 @router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_match(match_id: UUID, db: Session = Depends(get_db)):
@@ -151,6 +167,14 @@ def delete_match(match_id: UUID, db: Session = Depends(get_db)):
             os.remove(match_obj.video_path)
         except Exception as e:
             print(f"[Delete] Warning: failed to delete file {match_obj.video_path}: {e}")
+
+    artifact_dir = os.path.join(settings.UPLOAD_DIR, "artifacts", str(match_id))
+    if os.path.isdir(artifact_dir):
+        for artifact_name in os.listdir(artifact_dir):
+            artifact_path = os.path.join(artifact_dir, artifact_name)
+            if os.path.isfile(artifact_path):
+                os.remove(artifact_path)
+        os.rmdir(artifact_dir)
 
     db.delete(match_obj)
     db.commit()

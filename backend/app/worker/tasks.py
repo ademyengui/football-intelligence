@@ -69,6 +69,7 @@ def process_match(match_id: str):
             tracks=[t.model_dump() for t in results.tracks],
             heatmaps=results.heatmaps.model_dump(),
             possession=results.possession.model_dump(),
+            artifacts=[artifact.model_dump() for artifact in results.artifacts],
             trajectories=compressed_trajs
         )
         db.add(result_row)

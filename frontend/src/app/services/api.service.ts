@@ -11,6 +11,11 @@ export class ApiService {
   private http = inject(HttpClient);
   private baseUrl = environment.apiBaseUrl;
 
+  assetUrl(path: string | null | undefined): string {
+    if (!path) return '';
+    return path.startsWith('http') ? path : `${this.baseUrl}${path}`;
+  }
+
   getHealth(): Observable<HealthResponse> {
     return this.http.get<HealthResponse>(`${this.baseUrl}/health`);
   }

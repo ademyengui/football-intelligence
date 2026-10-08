@@ -52,6 +52,7 @@ class MatchResult(Base):
     tracks = Column(JSONB, nullable=False)
     heatmaps = Column(JSONB, nullable=False)
     possession = Column(JSONB, nullable=False)
+    artifacts = Column(JSONB, nullable=False, default=list)
     trajectories = Column(LargeBinary, nullable=True)  # gzip-compressed JSON
 
     match = relationship("Match", back_populates="results")

@@ -65,6 +65,7 @@ def import_results(file_path: str, name: str = None, db: Session = None):
             tracks=[t.model_dump() for t in results.tracks],
             heatmaps=results.heatmaps.model_dump(),
             possession=results.possession.model_dump(),
+            artifacts=[artifact.model_dump() for artifact in results.artifacts],
             trajectories=None
         )
         db.add(result_row)
