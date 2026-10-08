@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import cv2
@@ -35,7 +36,38 @@ def _write_video(path: Path, frames: list[np.ndarray], fps: float, size: tuple[i
             writer.write(frame)
     finally:
         writer.release()
-    os.replace(temp, path)
+    encoded = path.with_name(f"{path.stem}.encoded{path.suffix}")
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(temp),
+                "-c:v",
+                "libx264",
+                "-profile:v",
+                "baseline",
+                "-level",
+                "3.1",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(encoded),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(f"Unable to encode visual artifact '{path.name}': {result.stderr.strip()}")
+        os.replace(encoded, path)
+    finally:
+        temp.unlink(missing_ok=True)
+        encoded.unlink(missing_ok=True)
 
 
 def render_artifacts(

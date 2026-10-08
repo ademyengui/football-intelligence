@@ -13,7 +13,12 @@ export class ApiService {
 
   assetUrl(path: string | null | undefined): string {
     if (!path) return '';
-    return path.startsWith('http') ? path : `${this.baseUrl}${path}`;
+    if (path.startsWith('http')) return path;
+    const basePath = new URL(this.baseUrl).pathname.replace(/\/$/, '');
+    if (path === basePath || path.startsWith(`${basePath}/`)) {
+      return `${new URL(this.baseUrl).origin}${path}`;
+    }
+    return `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
 
   getHealth(): Observable<HealthResponse> {
