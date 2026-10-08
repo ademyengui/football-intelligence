@@ -6,17 +6,20 @@ from app.schemas import (
     MatchResultsResponse, ResultsMeta, TrackItem, RawTrajectoriesData
 )
 from app.pipeline.base import BasePipeline, PipelineContext
-from app.pipeline.calibrator import NaiveCalibrator
+from app.pipeline.calibrator import HomographyCalibrator
+from app.pipeline.keypoints import FieldKeypointDetector
 from app.pipeline.teams import TeamClassifier
 from app.pipeline.aggregate import (
     compute_track_distance_and_avg, build_heatmaps_data
 )
 from app.pipeline.possession import compute_possession_from_frames
+from app.pipeline.render import render_artifacts
 
 class RealPipeline(BasePipeline):
     """
     Real ML Pipeline orchestrator:
-    Roboflow Detector -> supervision.ByteTrack -> NaiveCalibrator -> Lab TeamClassifier -> Aggregator & Possession Engine.
+    Roboflow detectors -> supervision.ByteTrack -> pitch homography ->
+    Lab TeamClassifier -> Aggregator & Possession Engine.
     """
 
     def run(
@@ -55,7 +58,8 @@ class RealPipeline(BasePipeline):
         from app.pipeline.detector import Detector
 
         detector = Detector()
-        calibrator = NaiveCalibrator()
+        field_detector = FieldKeypointDetector()
+        calibrator = HomographyCalibrator()
         team_classifier = TeamClassifier()
 
         # Initialize ByteTrack
@@ -73,6 +77,7 @@ class RealPipeline(BasePipeline):
         raw_track_boxes: dict[int, dict[float, tuple[tuple[float, float], float]]] = {} # tid -> {t: (foot_pos, box_h)}
 
         frame_observations: list[dict] = []
+        render_frames: list[np.ndarray] = []
 
         frame_idx = 0
         processed_count = 0
@@ -94,8 +99,10 @@ class RealPipeline(BasePipeline):
                 else:
                     frame_proc = frame
 
-                # Run inference
+                # Run object and pitch-keypoint inference.
                 non_ball_dets, best_ball = detector.infer_frame(frame_proc)
+                frame_points, point_confidences = field_detector.infer_frame(frame_proc)
+                calibrator.update(frame_points, point_confidences)
 
                 # Convert non-ball detections to supervision Detections object
                 if non_ball_dets:
@@ -110,6 +117,7 @@ class RealPipeline(BasePipeline):
                 tracked_dets = byte_tracker.update_with_detections(sv_dets)
 
                 frame_cands = []
+                frame_detections = []
 
                 if tracked_dets and len(tracked_dets) > 0:
                     for i in range(len(tracked_dets)):
@@ -121,7 +129,7 @@ class RealPipeline(BasePipeline):
 
                         # Foot point & calibration
                         foot_px = calibrator.get_foot_point_px(bbox)
-                        x_m, y_m = calibrator.pixel_to_pitch(foot_px, (target_w, target_h))
+                        x_m, y_m = calibrator.pixel_to_pitch(foot_px)
                         box_h = float(bbox[3] - bbox[1])
 
                         if tid not in raw_track_points:
@@ -134,6 +142,12 @@ class RealPipeline(BasePipeline):
                         raw_track_stats[tid]['classes'].append(cname)
                         raw_track_stats[tid]['frames'] += 1
                         raw_track_boxes[tid][t_curr] = (foot_px, box_h)
+                        frame_detections.append({
+                            "track_id": tid,
+                            "bbox": [float(value) for value in bbox],
+                            "foot_px": foot_px,
+                            "pitch_pos": (x_m, y_m),
+                        })
 
                         # Collect upper-body crop color (up to 15 per track)
                         if len(raw_track_crops[tid]) < 15:
@@ -148,11 +162,16 @@ class RealPipeline(BasePipeline):
                         })
 
                 ball_pos = best_ball['center'] if best_ball else None
+                ball_pitch_pos = calibrator.pixel_to_pitch(ball_pos) if ball_pos and calibrator.matrix is not None else None
                 frame_observations.append({
                     't': t_curr,
                     'ball_pos': ball_pos,
-                    'candidates': frame_cands
+                    'ball_px': ball_pos,
+                    'ball_pitch_pos': ball_pitch_pos,
+                    'candidates': frame_cands,
+                    'detections': frame_detections
                 })
+                render_frames.append(frame_proc.copy())
 
                 processed_count += 1
 
@@ -229,10 +248,23 @@ class RealPipeline(BasePipeline):
                 team, role, _ = track_classifications.get(tid, (None, "other", "unknown"))
                 cand['team'] = team
                 cand['role'] = role
+            for detection in obs['detections']:
+                tid = detection['track_id']
+                team, role, _ = track_classifications.get(tid, (None, "other", "unknown"))
+                detection['team'] = team
+                detection['role'] = role
 
         total_dur_s = round(max_process_frames / src_fps, 1)
         possession_data = compute_possession_from_frames(frame_observations, total_dur_s)
         heatmaps_data = build_heatmaps_data(tracks_list, trajectories_map)
+        ctx.report(99, "Rendering notebook visual artifacts")
+        artifacts = render_artifacts(
+            match_id=match_id,
+            frames=render_frames,
+            observations=frame_observations,
+            classifications=track_classifications,
+            sample_fps=sample_fps,
+        )
 
         ctx.report(98, "Finalizing real pipeline results")
 
@@ -240,14 +272,15 @@ class RealPipeline(BasePipeline):
             schema_version=1,
             meta=ResultsMeta(
                 pipeline_mode="real",
-                calibration="naive",
+                calibration="homography",
                 duration_s=total_dur_s,
                 sample_fps=round(sample_fps, 1),
                 frame_size=(target_w, target_h)
             ),
             tracks=tracks_list,
             heatmaps=heatmaps_data,
-            possession=possession_data
+            possession=possession_data,
+            artifacts=artifacts
         )
 
         trajectories_obj = RawTrajectoriesData(trajectories=trajectories_map)

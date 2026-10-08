@@ -80,12 +80,22 @@ class PossessionData(BaseModel):
     intervals: list[PossessionInterval]
     summary: PossessionSummary
 
+class ArtifactItem(BaseModel):
+    kind: str
+    filename: str
+    url: str | None = None
+    media_type: str
+    width: int | None = None
+    height: int | None = None
+    duration_s: float | None = None
+
 class MatchResultsResponse(BaseModel):
     schema_version: int = 1
     meta: ResultsMeta
     tracks: list[TrackItem]
     heatmaps: HeatmapsData
     possession: PossessionData
+    artifacts: list[ArtifactItem] = Field(default_factory=list)
     # Trajectories are omitted from GET /results response per specification
 
 class RawTrajectoriesData(BaseModel):

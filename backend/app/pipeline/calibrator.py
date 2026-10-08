@@ -31,3 +31,45 @@ class NaiveCalibrator:
         y_m = max(0.0, min(self.pitch_height_m, y_m))
 
         return round(x_m, 1), round(y_m, 1)
+
+
+class HomographyCalibrator:
+    """Projects frame coordinates onto the notebook's configured pitch geometry."""
+
+    def __init__(self, confidence_threshold: float = 0.5, min_points: int = 4):
+        from sports.configs.soccer import SoccerPitchConfiguration
+
+        self.config = SoccerPitchConfiguration()
+        self.confidence_threshold = confidence_threshold
+        self.min_points = min_points
+        self.matrix = None
+
+    def update(self, frame_points, confidences) -> bool:
+        import cv2
+        import numpy as np
+
+        frame_points = np.asarray(frame_points, dtype=np.float32)
+        confidences = np.asarray(confidences, dtype=np.float32)
+        mask = confidences > self.confidence_threshold
+        if int(np.count_nonzero(mask)) < self.min_points:
+            return False
+
+        source = np.asarray(self.config.vertices, dtype=np.float32)[mask]
+        target = frame_points[mask]
+        matrix, _ = cv2.findHomography(target, source, method=0)
+        if matrix is None or not np.isfinite(matrix).all():
+            return False
+        self.matrix = matrix
+        return True
+
+    def pixel_to_pitch(self, point_px) -> tuple[float, float]:
+        import cv2
+        import numpy as np
+
+        if self.matrix is None:
+            raise ValueError("Pitch calibration is unavailable: no reliable field keypoints detected")
+        point = np.asarray([[point_px]], dtype=np.float32)
+        projected = cv2.perspectiveTransform(point, self.matrix)[0, 0]
+        x_m = float(np.clip(projected[0], 0.0, self.config.length))
+        y_m = float(np.clip(projected[1], 0.0, self.config.width))
+        return round(x_m, 1), round(y_m, 1)

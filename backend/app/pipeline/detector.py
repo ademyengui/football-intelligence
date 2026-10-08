@@ -1,4 +1,5 @@
-import torch
+import importlib.util
+
 from app.config import settings
 
 class Detector:
@@ -7,7 +8,10 @@ class Detector:
     Detects ball, goalkeeper, player, referee classes.
     """
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cpu"
+        if importlib.util.find_spec("torch") is not None:
+            import torch
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[Detector] Initialized detector on device: {self.device}")
         self.model = None
 
