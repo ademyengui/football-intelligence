@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: football
+      POSTGRES_USER: football
+      POSTGRES_PASSWORD: football
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U football -d football"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DATABASE_URL: postgresql+psycopg://football:football@postgres:5432/football
+      REDIS_URL: redis://redis:6379/0
+      PIPELINE_MODE: real
+      CORS_ORIGINS: http://localhost:4200
+      ROBOFLOW_API_KEY: ${ROBOFLOW_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      target: runtime
+    command: ["sh", "-c", "rq worker --url redis://redis:6379/0"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://football:football@postgres:5432/football
+      REDIS_URL: redis://redis:6379/0
+      PIPELINE_MODE: real
+      ROBOFLOW_API_KEY: ${ROBOFLOW_API_KEY:-}
+    volumes:
+      - uploads:/app/data/uploads
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      target: frontend-runtime
+    ports:
+      - "4200:80"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  uploads:

@@ -207,18 +207,18 @@ class RealPipeline(BasePipeline):
                 'majority_class': maj_class
             }
 
-        # Fit once on a bounded representative sample, then predict all tracks in
+        # Fit once on representative crops, then predict every tracked player in
         # one batch. This preserves the notebook model while avoiding one
         # SigLIP extraction pass per track.
         representative_crops = {
             tid: crops[:2] for tid, crops in raw_track_crops.items() if crops
         }
         all_crops = [
-            crop for crops in list(representative_crops.values())[:20] for crop in crops
+            crop for crops in representative_crops.values() for crop in crops
         ]
         ctx.report(86, f"Fitting team classifier on {len(all_crops)} crops")
         team_classifier.fit(all_crops)
-        prediction_tids = list(representative_crops)[:20]
+        prediction_tids = list(representative_crops)
         prediction_crops = [representative_crops[tid][0] for tid in prediction_tids]
         ctx.report(90, f"Classifying {len(prediction_crops)} tracked players")
         prediction_labels = team_classifier.predict(prediction_crops)

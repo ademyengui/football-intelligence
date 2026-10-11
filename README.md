@@ -181,6 +181,20 @@ Useful service endpoints:
 - API health: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
 - OpenAPI documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
+### Docker Compose
+
+To run the complete application with PostgreSQL, Redis, the API, the RQ
+worker, and the Angular frontend in containers:
+
+```bash
+ROBOFLOW_API_KEY=your-key docker compose up --build
+```
+
+Compose always sets `PIPELINE_MODE=real`. The dashboard is available at
+[http://localhost:4200](http://localhost:4200), and uploaded videos persist in
+the `uploads` volume. Do not put the API key in `docker-compose.yml` or commit
+your local `.env` file.
+
 To run services separately:
 
 ```bash
